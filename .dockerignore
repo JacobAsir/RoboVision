@@ -1,0 +1,17 @@
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.git/
+.gitignore
+.idea/
+.vscode/
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+temp_assets/
+robovision.db
+*.log
+.DS_Store
+Thumbs.db
+README.md

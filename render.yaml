@@ -1,0 +1,27 @@
+# Render Blueprint — https://render.com/docs/blueprint-spec
+# Deploy: Dashboard → New → Blueprint → connect this repo
+#
+# Or manually: New Web Service → Docker → root Dockerfile
+
+services:
+  - type: web
+    name: robovision
+    runtime: docker
+    plan: starter
+    region: oregon
+    # Use Dockerfile in repo root
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    healthCheckPath: /
+    envVars:
+      - key: PYTHONUNBUFFERED
+        value: "1"
+      - key: STREAMLIT_BROWSER_GATHER_USAGE_STATS
+        value: "false"
+      # Optional: force CPU-only torch behavior on small instances
+      - key: OMP_NUM_THREADS
+        value: "1"
+      - key: MKL_NUM_THREADS
+        value: "1"
+    # Streamlit needs enough RAM for YOLO; free/starter may OOM on cold start.
+    # Prefer Starter or higher if the free instance restarts under load.
