@@ -826,6 +826,62 @@ def detect_packages_on_belt(frame, package_model):
 # ==========================================
 # VIDEO SOURCE HELPER
 # ==========================================
+# Fallback URLs if demo files are missing inside the container (public GitHub / samples)
+DEMO_URLS = {
+    "secure": [
+        "https://github.com/intel-iot-devkit/sample-videos/raw/master/bottle-detection.mp4",
+        "https://raw.githubusercontent.com/JacobAsir/RoboVision/main/bottle-detection.mp4",
+    ],
+    "loading": [
+        "https://raw.githubusercontent.com/JacobAsir/RoboVision/main/5903898-hd_1920_1080_30fps.mp4",
+    ],
+}
+
+def ensure_demo_video(path, tab_key):
+    """Return local path if file exists; otherwise try download into BASE_DIR."""
+    path = os.path.abspath(path)
+    if os.path.isfile(path) and os.path.getsize(path) > 1000:
+        return path
+    urls = DEMO_URLS.get(tab_key, [])
+    import urllib.request
+    for url in urls:
+        try:
+            st.warning(t("demo_downloading"))
+            urllib.request.urlretrieve(url, path)
+            if os.path.isfile(path) and os.path.getsize(path) > 1000:
+                return path
+        except Exception:
+            continue
+    return None
+
+def open_video_capture(source):
+    """
+    Open a video path robustly on Linux/Render (absolute path + FFmpeg backend).
+    Returns (cap, error_message_or_None).
+    """
+    if not source:
+        return None, "No video source selected."
+    path = os.path.abspath(str(source))
+    if not os.path.isfile(path):
+        return None, f"Video file not found: {path}"
+    if os.path.getsize(path) < 1000:
+        return None, f"Video file is empty/corrupt: {path}"
+
+    # Prefer FFmpeg backend (Linux Docker / Render)
+    cap = cv2.VideoCapture(path, cv2.CAP_FFMPEG)
+    if not cap.isOpened():
+        cap.release()
+        cap = cv2.VideoCapture(path)
+    if not cap.isOpened():
+        return None, f"OpenCV could not open video (codec/path): {path}"
+    # Smoke-test one frame (some builds open but cannot decode)
+    ok, _ = cap.read()
+    if not ok:
+        cap.release()
+        return None, f"OpenCV opened but could not read frames: {path}"
+    cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
+    return cap, None
+
 def get_video_source(tab_key):
     """Simple video source selector — just demo video or upload your own."""
     st.markdown(f"""
@@ -851,19 +907,18 @@ def get_video_source(tab_key):
     demo_file = DEMO_VIDEO_SECURE if tab_key == "secure" else DEMO_VIDEO_LOADING
 
     if source_choice == "demo":
-        if os.path.exists(demo_file):
-            return demo_file
-        else:
-            if tab_key == "secure":
-                st.warning(t("demo_downloading"))
-                import urllib.request
-                urllib.request.urlretrieve(
-                    "https://github.com/intel-iot-devkit/sample-videos/raw/master/bottle-detection.mp4",
-                    demo_file)
-                st.rerun()
-            else:
-                st.error(t("demo_missing", path=demo_file))
-                return None
+        resolved = ensure_demo_video(demo_file, tab_key)
+        if resolved:
+            return resolved
+        st.error(t("demo_missing", path=os.path.abspath(demo_file)))
+        with st.expander("Debug (Render)"):
+            st.code(
+                f"BASE_DIR={BASE_DIR}\n"
+                f"cwd={os.getcwd()}\n"
+                f"exists={os.path.exists(demo_file)}\n"
+                f"files={os.listdir(BASE_DIR)[:40]}"
+            )
+        return None
     else:
         uploaded = st.file_uploader(t("drop_video"), type=["mp4", "avi", "mov"], key=f"upload_{tab_key}")
         if uploaded:
@@ -1128,9 +1183,11 @@ if active_use_case == "secure":
             format_func=cls_label,
         )
         
-        # Clean run toggle
+        # Clean run toggle — new key defaults ON (old sessions may have left feed off)
         st.markdown("")
-        run_secure = st.toggle(t("activate_cctv"), value=True, key="run_secure")
+        if "run_secure_v2" not in st.session_state:
+            st.session_state.run_secure_v2 = True
+        run_secure = st.toggle(t("activate_cctv"), key="run_secure_v2")
 
     with col_vid:
         st.markdown(f"<div style='font-family:Outfit; font-weight:600; font-size:16px; margin-bottom:8px;'>{t('live_cctv')}</div>", unsafe_allow_html=True)
@@ -1152,7 +1209,7 @@ if active_use_case == "secure":
         try:
             src_path = os.path.abspath(video_source) if isinstance(video_source, str) else ""
             demo_path = os.path.abspath(DEMO_VIDEO_SECURE)
-            if not src_path or src_path != demo_path:
+            if not src_path or os.path.basename(src_path) != os.path.basename(demo_path):
                 return
             fps_use = fps_hint if fps_hint and fps_hint > 0 else capture.get(cv2.CAP_PROP_FPS)
             if not fps_use or fps_use <= 0:
@@ -1163,10 +1220,17 @@ if active_use_case == "secure":
             pass
 
     # Active monitoring thread execution
-    if run_secure and source:
-        cap = cv2.VideoCapture(source)
-        if not cap.isOpened():
+    if not run_secure:
+        stframe.info("Turn **ON** Activate CCTV Feed to start the video.")
+    elif not source:
+        stframe.warning("No video source available.")
+    elif run_secure and source:
+        cap, cap_err = open_video_capture(source)
+        if cap is None:
             st.error(t("open_video_fail"))
+            st.error(cap_err or "")
+            with st.expander("Debug (Render)"):
+                st.code(f"source={source}\nBASE_DIR={BASE_DIR}\ncwd={os.getcwd()}\nfiles={[f for f in os.listdir(BASE_DIR) if f.endswith(('.mp4','.pt','.png'))]}")
         else:
             try:
                 # Faster than real-time so the bottle demo doesn't feel like a long wait
@@ -1429,7 +1493,9 @@ elif active_use_case == "loading":
         
         # Clean run toggle
         st.markdown("")
-        run_loading = st.toggle(t("activate_verify"), value=True, key="run_loading")
+        if "run_loading_v2" not in st.session_state:
+            st.session_state.run_loading_v2 = True
+        run_loading = st.toggle(t("activate_verify"), key="run_loading_v2")
 
     with col_vid2:
         st.markdown(f"<div style='font-family:Outfit; font-weight:600; font-size:16px; margin-bottom:8px;'>{t('live_verify')}</div>", unsafe_allow_html=True)
@@ -1472,11 +1538,19 @@ elif active_use_case == "loading":
             st.warning(t("world_fallback", err=e))
 
     # Active verification thread execution
-    if run_loading and source2:
-        cap = cv2.VideoCapture(source2)
-        if not cap.isOpened():
+    if not run_loading:
+        stframe2.info("Turn **ON** Activate Verification Feed to start the video.")
+    elif not source2:
+        stframe2.warning(t("select_source"))
+    elif run_loading and source2:
+        cap, cap_err = open_video_capture(source2)
+        if cap is None:
             st.error(t("open_source_fail", path=source2))
             stframe2.warning(t("video_open_fail"))
+            if cap_err:
+                st.error(cap_err)
+            with st.expander("Debug (Render)"):
+                st.code(f"source={source2}\nBASE_DIR={BASE_DIR}\nfiles={[f for f in os.listdir(BASE_DIR) if f.endswith(('.mp4','.pt','.png'))]}")
         else:
             try:
                 # Retrieve video frame rate to match original playback speed

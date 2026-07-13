@@ -23,8 +23,17 @@ RUN pip install --upgrade pip && pip install -r requirements.txt
 
 COPY . .
 
+# Fail the build if demo videos/models were not copied (common Render/Git issue)
+RUN test -f /app/main.py \
+    && test -f /app/bottle-detection.mp4 \
+    && test -f /app/5903898-hd_1920_1080_30fps.mp4 \
+    && test -f /app/yolov8n.pt \
+    && ls -lh /app/*.mp4 /app/*.pt \
+    && echo "Demo assets OK"
+
 # Render sets $PORT; default 8501 for local docker runs
-ENV PORT=8501
+ENV PORT=8501 \
+    OPENCV_FFMPEG_CAPTURE_OPTIONS=rtsp_transport;tcp
 EXPOSE 8501
 
 # Health-friendly Streamlit bind
@@ -32,4 +41,6 @@ CMD streamlit run main.py \
     --server.port=${PORT} \
     --server.address=0.0.0.0 \
     --server.headless=true \
+    --server.enableCORS=false \
+    --server.enableXsrfProtection=false \
     --browser.gatherUsageStats=false
