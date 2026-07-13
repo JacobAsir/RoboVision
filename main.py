@@ -1,6 +1,5 @@
 import streamlit as st
 import cv2
-from ultralytics import YOLO
 import time
 from datetime import datetime
 import pandas as pd
@@ -8,14 +7,17 @@ import sqlite3
 import numpy as np
 import os
 import base64
+import gc
 
 # ==========================================
 # INTERNAL CONFIG (Hidden from user)
 # ==========================================
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 MODEL_NAME = os.path.join(BASE_DIR, "yolov8n.pt")
-# Open-vocabulary model for packages (COCO has no package/box class)
+# Open-vocabulary model for packages (heavier — only used when not low-memory)
 PACKAGE_MODEL_NAME = os.path.join(BASE_DIR, "yolov8s-world.pt")
+# Render free = 512MB → must stay low-mem (single nano model, no YOLO-World)
+LOW_MEM = os.environ.get("ROBOVISION_LOW_MEM", "1").strip().lower() in ("1", "true", "yes", "on")
 CONF_THRESHOLD = 0.40
 SECURE_CONF_THRESHOLD = 0.28         # softer so bottles + people stick in demo footage
 LOADING_CONF_THRESHOLD = 0.22
@@ -26,13 +28,14 @@ MIN_PRODUCT_SEEN = 3                 # must be visible this many frames before a
 STABLE_WINDOW = 8
 # Bottle / secure demo: snappy but still trackable (stride 1 keeps multi-bottle IDs stable)
 SECURE_PLAYBACK_SPEED = 1.75         # slightly faster than real-time
-SECURE_FRAME_STRIDE = 1              # every frame — critical for multi-bottle accuracy
+SECURE_FRAME_STRIDE = 2 if LOW_MEM else 1  # skip frames on small Render instances
 SECURE_DEMO_START_SEC = 3.0          # skip first 3s of bottle demo (idle intro)
 SECURE_SLOT_MATCH_DIST = 100.0       # px — match bottles by position, not only YOLO track id
+INFER_IMGSZ = 320 if LOW_MEM else 416
 DEMO_VIDEO_SECURE = os.path.join(BASE_DIR, "bottle-detection.mp4")
 DEMO_VIDEO_LOADING = os.path.join(BASE_DIR, "5903898-hd_1920_1080_30fps.mp4")
 DB_PATH = os.path.join(BASE_DIR, "robovision.db")
-# Fallback proxies if YOLO-World is unavailable
+# Fallback proxies if YOLO-World is unavailable / low-mem
 PACKAGE_COCO_CLASSES = ("suitcase", "book", "backpack", "handbag", "bed", "microwave")
 PACKAGE_WORLD_CLASSES = [
     "package", "parcel", "cardboard box", "box", "mailer bag", "shipping package"
@@ -60,8 +63,8 @@ def _img_data_uri(path, max_height=None):
             b64 = base64.b64encode(f.read()).decode("ascii")
         return f"data:image/png;base64,{b64}"
 
-LOGO_URI = _img_data_uri(LOGO_PATH, max_height=96)
-ROFI_URI = _img_data_uri(ROFI_PATH, max_height=320)  # high-res enough for large header mascot
+LOGO_URI = _img_data_uri(LOGO_PATH, max_height=72 if LOW_MEM else 96)
+ROFI_URI = _img_data_uri(ROFI_PATH, max_height=160 if LOW_MEM else 280)
 
 # ==========================================
 # PAGE SETUP
@@ -404,16 +407,17 @@ def reset_model_trackers():
     so the next model.track() re-initializes cleanly.
     """
     try:
-        m = load_model()
+        m = st.session_state.get("_yolo_model")
+        if m is None:
+            return
         predictor = getattr(m, "predictor", None)
         if predictor is None:
             return
         trackers = getattr(predictor, "trackers", None)
         if trackers:
-            for t in trackers:
-                if hasattr(t, "reset"):
-                    t.reset()
-        # Drop trackers so on_predict_start recreates them (do NOT assign [])
+            for tr in trackers:
+                if hasattr(tr, "reset"):
+                    tr.reset()
         if hasattr(predictor, "trackers"):
             delattr(predictor, "trackers")
         if hasattr(predictor, "vid_path"):
@@ -726,20 +730,56 @@ st.markdown(f"""
 
 
 # ==========================================
-# LOAD MODELS (cached)
+# LOAD MODELS (lazy, single model — critical for Render 512MB)
 # ==========================================
-@st.cache_resource
-def load_model():
-    return YOLO(MODEL_NAME)
+def _configure_torch_low_mem():
+    try:
+        import torch
+        torch.set_num_threads(1)
+        if hasattr(torch, "set_num_interop_threads"):
+            torch.set_num_interop_threads(1)
+        os.environ.setdefault("OMP_NUM_THREADS", "1")
+        os.environ.setdefault("MKL_NUM_THREADS", "1")
+        os.environ.setdefault("CUDA_VISIBLE_DEVICES", "")
+    except Exception:
+        pass
 
-@st.cache_resource
-def load_package_model():
-    """YOLO-World can detect 'package'/'box' by text — COCO YOLOv8n cannot."""
-    m = YOLO(PACKAGE_MODEL_NAME)
-    m.set_classes(PACKAGE_WORLD_CLASSES)
+def get_detector(for_packages: bool = False):
+    """
+    Lazy-load ONE YOLO model only.
+    Low-mem (Render free 512MB): always yolov8n.pt — never load YOLO-World.
+    Full mem: packages can use yolov8s-world.pt.
+    """
+    _configure_torch_low_mem()
+    from ultralytics import YOLO
+
+    want_world = bool(for_packages) and (not LOW_MEM) and os.path.isfile(PACKAGE_MODEL_NAME)
+    kind = "world" if want_world else "n"
+    cached_kind = st.session_state.get("_yolo_kind")
+    model = st.session_state.get("_yolo_model")
+
+    if model is not None and cached_kind == kind:
+        return model
+
+    # Drop previous model before loading another (avoid 2× RAM)
+    if model is not None:
+        try:
+            del model
+        except Exception:
+            pass
+        st.session_state["_yolo_model"] = None
+        st.session_state["_yolo_kind"] = None
+        gc.collect()
+
+    if kind == "world":
+        m = YOLO(PACKAGE_MODEL_NAME)
+        m.set_classes(PACKAGE_WORLD_CLASSES)
+    else:
+        m = YOLO(MODEL_NAME)
+
+    st.session_state["_yolo_model"] = m
+    st.session_state["_yolo_kind"] = kind
     return m
-
-model = load_model()
 
 def belt_roi_polygon(h, w):
     """Conveyor surface ROI for the demo camera (normalized → pixels)."""
@@ -780,20 +820,29 @@ def nms_boxes(boxes, thr=0.30):
         boxes = remaining
     return keep
 
-def detect_packages_on_belt(frame, package_model):
+def detect_packages_on_belt(frame, package_model, use_world: bool = True):
     """
-    Count packages only on the conveyor belt using open-vocab YOLO-World.
+    Count packages only on the conveyor belt.
+    World model: open-vocab labels. Low-mem: COCO proxies inside belt ROI.
     Returns (count, list of (x1,y1,x2,y2,conf), annotated_frame).
     """
     h, w = frame.shape[:2]
     mask = belt_roi_mask(h, w)
+    imgsz = INFER_IMGSZ
+    conf = PACKAGE_CONF_THRESHOLD if use_world else LOADING_CONF_THRESHOLD
     results = package_model.predict(
-        frame, conf=PACKAGE_CONF_THRESHOLD, iou=0.45, imgsz=640, verbose=False
+        frame, conf=conf, iou=0.45, imgsz=imgsz, verbose=False
     )
     raw = []
     for box in results[0].boxes:
+        cls_name = package_model.names[int(box.cls[0])]
+        if use_world:
+            pass  # world classes already restricted via set_classes
+        else:
+            if cls_name not in PACKAGE_COCO_CLASSES:
+                continue
         x1, y1, x2, y2 = map(int, box.xyxy[0].tolist())
-        conf = float(box.conf[0])
+        conf_v = float(box.conf[0])
         cx, cy = (x1 + x2) // 2, (y1 + y2) // 2
         if mask[min(h - 1, max(0, cy)), min(w - 1, max(0, cx))] == 0:
             continue
@@ -808,16 +857,16 @@ def detect_packages_on_belt(frame, package_model):
             continue
         if cy < int(0.22 * h):
             continue
-        raw.append((x1, y1, x2, y2, conf))
+        raw.append((x1, y1, x2, y2, conf_v))
 
     boxes = nms_boxes(raw, thr=0.30)
     annotated = frame.copy()
     # light ROI outline so operators know where we count
     cv2.polylines(annotated, [belt_roi_polygon(h, w)], True, (77, 107, 255), 1)
-    for x1, y1, x2, y2, conf in boxes:
+    for x1, y1, x2, y2, conf_v in boxes:
         cv2.rectangle(annotated, (x1, y1), (x2, y2), (16, 185, 129), 2)
         draw_text(
-            annotated, f"{t('package_label')} {conf:.2f}",
+            annotated, f"{t('package_label')} {conf_v:.2f}",
             (x1, max(18, y1 - 8)), color_bgr=(16, 185, 129), scale=0.5, thickness=2
         )
     return len(boxes), boxes, annotated
@@ -975,7 +1024,7 @@ def match_fallback_track(cx, cy, cls_id, bbox):
     }
     return new_id
 
-def get_tracks(results, product_class):
+def get_tracks(results, product_class, names):
     products, persons = [], []
     boxes = results[0].boxes
     if boxes is None or len(boxes) == 0:
@@ -983,7 +1032,7 @@ def get_tracks(results, product_class):
     has_ids = boxes.id is not None
     for i, box in enumerate(boxes):
         cls_id = int(box.cls[0])
-        name = model.names[cls_id]
+        name = names[cls_id]
         bbox = box.xyxy[0].cpu().tolist()
         conf = float(box.conf[0])
         cx, cy = int((bbox[0]+bbox[2])/2), int((bbox[1]+bbox[3])/2)
@@ -1263,19 +1312,20 @@ if active_use_case == "secure":
                     if SECURE_FRAME_STRIDE > 1 and (secure_frame_i % SECURE_FRAME_STRIDE) != 0:
                         continue
                     
-                    # 1. Resize for CPU-friendly inference
+                    # 1. Resize for CPU-friendly / low-RAM inference
                     h, w = frame.shape[:2]
-                    target_w = 640
+                    target_w = 480 if LOW_MEM else 640
                     target_h = int(h * (target_w / w))
                     resized_frame = cv2.resize(frame, (target_w, target_h))
                     
-                    # 2. Detect + track bottles
+                    # 2. Detect + track bottles (lazy-load nano model only)
+                    model = get_detector(for_packages=False)
                     results = model.track(
                         source=resized_frame, persist=True,
                         conf=SECURE_CONF_THRESHOLD, iou=IOU_THRESHOLD,
-                        imgsz=416, verbose=False
+                        imgsz=INFER_IMGSZ, verbose=False
                     )
-                    curr_products, curr_persons = get_tracks(results, product_class)
+                    curr_products, curr_persons = get_tracks(results, product_class, model.names)
 
                     # 3. Spatial slots — one slot per bottle position (2 removals → 2 logs)
                     removal_events, person_now = update_product_slots(curr_products, curr_persons)
@@ -1530,12 +1580,9 @@ elif active_use_case == "loading":
 
     target_classes = list(PACKAGE_COCO_CLASSES) if verify_class == "package" else [verify_class]
     load_conf = LOADING_CONF_THRESHOLD if verify_class == "package" else CONF_THRESHOLD
-    package_model = None
-    if verify_class == "package":
-        try:
-            package_model = load_package_model()
-        except Exception as e:
-            st.warning(t("world_fallback", err=e))
+    use_world = (verify_class == "package") and (not LOW_MEM)
+    if verify_class == "package" and LOW_MEM:
+        st.caption("Low-memory mode (Render 512MB): package counting uses YOLOv8n + belt ROI.")
 
     # Active verification thread execution
     if not run_loading:
@@ -1559,6 +1606,7 @@ elif active_use_case == "loading":
                 # Skip frames when inference is slower than real-time so the UI stays responsive
                 frame_idx = 0
                 consecutive_fail = 0
+                model = get_detector(for_packages=use_world)
 
                 # Show first raw frame immediately so the panel is never empty while YOLO warms up
                 ret0, frame0 = cap.read()
@@ -1583,19 +1631,22 @@ elif active_use_case == "loading":
                         break
                     consecutive_fail = 0
                     frame_idx += 1
+                    if LOW_MEM and frame_idx % 2 == 0:
+                        continue
                     
                     # 1. Resize for CPU-friendly inference
                     h, w = frame.shape[:2]
-                    target_w = 640
+                    target_w = 480 if LOW_MEM else 640
                     target_h = int(h * (target_w / w))
                     resized_frame = cv2.resize(frame, (target_w, target_h))
                     
-                    # 2. Package mode: open-vocab + belt ROI (accurate for parcels)
-                    #    Other items: standard COCO YOLO
-                    if verify_class == "package" and package_model is not None:
-                        count, _boxes, annotated = detect_packages_on_belt(resized_frame, package_model)
+                    # 2. Package mode: world (full RAM) or nano+ROI (low mem)
+                    if verify_class == "package":
+                        count, _boxes, annotated = detect_packages_on_belt(
+                            resized_frame, model, use_world=use_world
+                        )
                     else:
-                        results = model(resized_frame, conf=load_conf, imgsz=640, verbose=False)
+                        results = model(resized_frame, conf=load_conf, imgsz=INFER_IMGSZ, verbose=False)
                         annotated = resized_frame.copy()
                         count = 0
                         for box in results[0].boxes:

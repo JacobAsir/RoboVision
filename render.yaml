@@ -1,7 +1,8 @@
 # Render Blueprint — https://render.com/docs/blueprint-spec
-# Deploy: Dashboard → New → Blueprint → connect this repo
+# Deploy: New → Blueprint → connect this repo
 #
-# Or manually: New Web Service → Docker → root Dockerfile
+# RAM: free/starter are often 512MB. YOLO needs every optimization we enable
+# via ROBOVISION_LOW_MEM=1. If it still OOMs, upgrade to Standard (2GB).
 
 services:
   - type: web
@@ -9,7 +10,6 @@ services:
     runtime: docker
     plan: starter
     region: oregon
-    # Use Dockerfile in repo root
     dockerfilePath: ./Dockerfile
     dockerContext: .
     healthCheckPath: /
@@ -18,10 +18,15 @@ services:
         value: "1"
       - key: STREAMLIT_BROWSER_GATHER_USAGE_STATS
         value: "false"
-      # Optional: force CPU-only torch behavior on small instances
+      - key: ROBOVISION_LOW_MEM
+        value: "1"
       - key: OMP_NUM_THREADS
         value: "1"
       - key: MKL_NUM_THREADS
         value: "1"
-    # Streamlit needs enough RAM for YOLO; free/starter may OOM on cold start.
-    # Prefer Starter or higher if the free instance restarts under load.
+      - key: OPENBLAS_NUM_THREADS
+        value: "1"
+      - key: MALLOC_ARENA_MAX
+        value: "2"
+      - key: CUDA_VISIBLE_DEVICES
+        value: ""
