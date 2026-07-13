@@ -9,6 +9,10 @@ import os
 import base64
 import gc
 
+# Streamlit Cloud / containers: Ultralytics cannot write ~/.config
+os.environ.setdefault("YOLO_CONFIG_DIR", os.path.join("/tmp", "Ultralytics"))
+os.environ.setdefault("MPLCONFIGDIR", os.path.join("/tmp", "matplotlib"))
+
 # ==========================================
 # INTERNAL CONFIG (Hidden from user)
 # ==========================================
@@ -1318,12 +1322,16 @@ if active_use_case == "secure":
                     target_h = int(h * (target_w / w))
                     resized_frame = cv2.resize(frame, (target_w, target_h))
                     
-                    # 2. Detect + track bottles (lazy-load nano model only)
+                    # 2. Detect bottles (predict — no `lap` / ByteTrack dependency for Streamlit Cloud)
+                    #    Spatial slots below assign stable IDs; model.track() needs package `lap`
+                    #    which Cloud cannot install (venv permission denied).
                     model = get_detector(for_packages=False)
-                    results = model.track(
-                        source=resized_frame, persist=True,
-                        conf=SECURE_CONF_THRESHOLD, iou=IOU_THRESHOLD,
-                        imgsz=INFER_IMGSZ, verbose=False
+                    results = model.predict(
+                        source=resized_frame,
+                        conf=SECURE_CONF_THRESHOLD,
+                        iou=IOU_THRESHOLD,
+                        imgsz=INFER_IMGSZ,
+                        verbose=False,
                     )
                     curr_products, curr_persons = get_tracks(results, product_class, model.names)
 

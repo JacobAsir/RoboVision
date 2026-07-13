@@ -1,6 +1,10 @@
-streamlit>=1.32.0
-opencv-python-headless>=4.8.0
-ultralytics>=8.1.0
-pandas>=2.0.0
-numpy>=1.24.0
-Pillow>=10.0.0
+# Streamlit Community Cloud installs this file (not poetry).
+# Keep lean for cloud; pin Python 3.11/3.12 in the Streamlit app settings (not 3.14).
+streamlit>=1.32.0,<1.50.0
+opencv-python-headless>=4.8.0,<4.12.0
+ultralytics>=8.1.0,<8.4.0
+pandas>=2.0.0,<3.0.0
+numpy>=1.24.0,<2.3.0
+Pillow>=10.0.0,<12.0.0
+# Tracking helper (optional). App uses predict()+spatial slots so Cloud works without lap.
+# lapx>=0.5.2
