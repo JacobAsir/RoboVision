@@ -1908,11 +1908,7 @@ elif active_use_case == "container":
     with col_ctrl3:
         source3 = get_video_source("container")
 
-        target_container = st.selectbox(
-            t("select_container"),
-            ["Container ❶ (40ft High Cube)", "Container ❷ (20ft Standard)", "10-Ton Cargo Truck"],
-            index=0, key="container_type_sel",
-        )
+        target_container = "Container ❶ (40ft High Cube)"
 
         st.markdown("")
         if "run_container_v1" not in st.session_state:
@@ -2039,6 +2035,8 @@ elif active_use_case == "container":
                     target_w = 480 if LOW_MEM else 640
                     target_h = int(h * (target_w / w))
                     resized = cv2.resize(frame, (target_w, target_h))
+                    if source3 == DEMO_VIDEO_LOADING or "Scenario 2" in st.session_state.get("container_scenario_sel", ""):
+                        resized = cv2.GaussianBlur(resized, (7, 7), 0)
 
                     # Perform YOLO detection
                     results = model.predict(resized, conf=0.12, imgsz=INFER_IMGSZ, verbose=False)
