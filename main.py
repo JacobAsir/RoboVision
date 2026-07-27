@@ -1725,6 +1725,7 @@ elif active_use_case == "loading":
                     target_w = 480 if LOW_MEM else 640
                     target_h = int(h * (target_w / w))
                     resized_frame = cv2.resize(frame, (target_w, target_h))
+                    resized_frame = cv2.GaussianBlur(resized_frame, (7, 7), 0)
                     
                     # 2. Package mode: world (full RAM) or nano+ROI (low mem)
                     if verify_class == "package":
