@@ -39,6 +39,7 @@ SECURE_SLOT_MATCH_DIST = 100.0       # px — match bottles by position, not onl
 INFER_IMGSZ = 320 if LOW_MEM else 416
 DEMO_VIDEO_SECURE = os.path.join(BASE_DIR, "bottle-detection.mp4")
 DEMO_VIDEO_LOADING = os.path.join(BASE_DIR, "5903898-hd_1920_1080_30fps.mp4")
+DEMO_VIDEO_CONTAINER = os.path.join(BASE_DIR, "container-loading-demo.mp4")
 DB_PATH = os.path.join(BASE_DIR, "robovision.db")
 # Fallback proxies if YOLO-World is unavailable / low-mem
 PACKAGE_COCO_CLASSES = (
@@ -1009,7 +1010,12 @@ def get_video_source(tab_key):
         label_visibility="collapsed",
     )
 
-    demo_file = DEMO_VIDEO_SECURE if tab_key == "secure" else DEMO_VIDEO_LOADING
+    if tab_key == "secure":
+        demo_file = DEMO_VIDEO_SECURE
+    elif tab_key == "container":
+        demo_file = DEMO_VIDEO_CONTAINER
+    else:
+        demo_file = DEMO_VIDEO_LOADING
 
     if source_choice == "demo":
         resolved = ensure_demo_video(demo_file, tab_key)
