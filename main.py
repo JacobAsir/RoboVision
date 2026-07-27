@@ -1725,7 +1725,6 @@ elif active_use_case == "loading":
                     target_w = 480 if LOW_MEM else 640
                     target_h = int(h * (target_w / w))
                     resized_frame = cv2.resize(frame, (target_w, target_h))
-                    resized_frame = cv2.GaussianBlur(resized_frame, (7, 7), 0)
                     
                     # 2. Package mode: world (full RAM) or nano+ROI (low mem)
                     if verify_class == "package":
@@ -2036,12 +2035,10 @@ elif active_use_case == "container":
                     target_w = 480 if LOW_MEM else 640
                     target_h = int(h * (target_w / w))
                     resized = cv2.resize(frame, (target_w, target_h))
-                    if source3 == DEMO_VIDEO_LOADING or "Scenario 2" in st.session_state.get("container_scenario_sel", ""):
-                        resized = cv2.GaussianBlur(resized, (7, 7), 0)
 
-                    # Perform YOLO detection
+                    # Perform YOLO detection on sharp frame for maximum accuracy
                     results = model.predict(resized, conf=0.12, imgsz=INFER_IMGSZ, verbose=False)
-                    annotated = resized.copy()
+                    annotated = cv2.GaussianBlur(resized, (5, 5), 0) if (source3 == DEMO_VIDEO_LOADING or "Scenario 2" in st.session_state.get("container_scenario_sel", "")) else resized.copy()
 
                     # Color-code items on the belt as Box A (Green), Box B (Blue), Box C (Yellow)
                     boxes = nms_boxes([(int(b.xyxy[0][0]), int(b.xyxy[0][1]), int(b.xyxy[0][2]), int(b.xyxy[0][3]), float(b.conf[0])) for b in results[0].boxes if model.names[int(b.cls[0])] in PACKAGE_COCO_CLASSES], thr=0.30)
