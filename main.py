@@ -710,8 +710,16 @@ div[data-testid="stRadio"] > label {
 # ==========================================
 # Use key="ui_lang" only — never assign st.session_state.ui_lang after the radio widget
 if "ui_lang" not in st.session_state:
-    legacy = st.session_state.get("lang")
-    st.session_state.ui_lang = legacy if legacy in ("en", "ja") else "en"
+    qp_lang = st.query_params.get("lang")
+    if qp_lang in ("en", "ja"):
+        st.session_state.ui_lang = qp_lang
+    else:
+        legacy = st.session_state.get("lang")
+        st.session_state.ui_lang = legacy if legacy in ("en", "ja") else "en"
+
+def on_lang_change():
+    if "ui_lang" in st.session_state:
+        st.query_params["lang"] = st.session_state.ui_lang
 
 _logo_html = (
     f'<img src="{LOGO_URI}" alt="RoboFounders" '
@@ -760,6 +768,7 @@ with _hdr_right:
         format_func=lambda c: "English" if c == "en" else "日本語",
         horizontal=True,
         key="ui_lang",
+        on_change=on_lang_change,
         label_visibility="collapsed",
     )
 
