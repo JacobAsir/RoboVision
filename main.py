@@ -1919,8 +1919,20 @@ elif active_use_case == "container":
         guidance_placeholder3 = st.empty()
         log_table3 = st.empty()
 
-    def render_container_spatial_map():
-        """Render an SVG/HTML spatial plan of Container ❶ showing color-coded stacked layers."""
+    def render_container_spatial_map(stage: int = 3):
+        """Render an SVG/HTML spatial plan of Container ❶ showing color-coded stacked layers dynamically."""
+        box_a_opacity = "0.3" if stage >= 1 else "0.05"
+        box_a_border = "#10b981" if stage >= 1 else "rgba(255,255,255,0.1)"
+        box_a_text = f"{t('box_a')} [FLOOR: PACKED]" if stage >= 1 else f"{t('box_a')} [WAITING]"
+
+        box_b_opacity = "0.25" if stage >= 2 else "0.05"
+        box_b_border = "#4d6bff" if stage >= 2 else "rgba(255,255,255,0.1)"
+        box_b_text = f"{t('box_b')} [MID: STACKED]" if stage >= 2 else f"{t('box_b')} [WAITING]"
+
+        box_c_opacity = "0.25" if stage >= 3 else "0.05"
+        box_c_border = "#eab308" if stage >= 3 else "rgba(255,255,255,0.1)"
+        box_c_text = f"{t('box_c')} [TOP: COMPLETE]" if stage >= 3 else f"{t('box_c')} [WAITING]"
+
         map_html = textwrap.dedent(f"""
         <div style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); border-radius: 12px; padding: 16px; margin-bottom: 12px;">
             <div style="font-size: 13px; font-weight: 700; color: #fff; font-family: 'Outfit', sans-serif; margin-bottom: 12px; display:flex; justify-content:space-between; align-items:center;">
@@ -1929,27 +1941,18 @@ elif active_use_case == "container":
             </div>
             <div style="position: relative; width: 100%; height: 150px; border: 2px dashed rgba(77,107,255,0.4); border-radius: 8px; background: rgba(10,15,26,0.8); padding: 8px; box-sizing: border-box; display: flex; flex-direction: column; justify-content: flex-end; gap: 6px;">
                 <div style="display: flex; gap: 6px; height: 36px;">
-                    <div style="flex: 1; background: rgba(234,179,8,0.25); border: 1px solid #eab308; border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; color: #fde047;">
-                        {t("box_c")} [TOP]
-                    </div>
-                    <div style="flex: 1; background: rgba(234,179,8,0.25); border: 1px solid #eab308; border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; color: #fde047;">
-                        {t("box_c")} [TOP]
+                    <div style="flex: 1; background: rgba(234,179,8,{box_c_opacity}); border: 1px solid {box_c_border}; border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; color: #fde047;">
+                        {box_c_text}
                     </div>
                 </div>
                 <div style="display: flex; gap: 6px; height: 40px;">
-                    <div style="flex: 1; background: rgba(77,107,255,0.25); border: 1px solid #4d6bff; border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; color: #93c5fd;">
-                        {t("box_b")} [MID]
-                    </div>
-                    <div style="flex: 1; background: rgba(77,107,255,0.25); border: 1px solid #4d6bff; border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; color: #93c5fd;">
-                        {t("box_b")} [MID]
+                    <div style="flex: 1; background: rgba(77,107,255,{box_b_opacity}); border: 1px solid {box_b_border}; border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; color: #93c5fd;">
+                        {box_b_text}
                     </div>
                 </div>
                 <div style="display: flex; gap: 6px; height: 46px;">
-                    <div style="flex: 1; background: rgba(16,185,129,0.3); border: 1px solid #10b981; border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 800; color: #6ee7b7;">
-                        {t("box_a")} [FLOOR]
-                    </div>
-                    <div style="flex: 1; background: rgba(16,185,129,0.3); border: 1px solid #10b981; border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 800; color: #6ee7b7;">
-                        {t("box_a")} [FLOOR]
+                    <div style="flex: 1; background: rgba(16,185,129,{box_a_opacity}); border: 1px solid {box_a_border}; border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 800; color: #6ee7b7;">
+                        {box_a_text}
                     </div>
                 </div>
             </div>
@@ -1957,22 +1960,30 @@ elif active_use_case == "container":
         """)
         spatial_map_placeholder3.markdown(map_html, unsafe_allow_html=True)
 
-    def render_stacking_guidance():
-        """Render step-by-step worker stacking sequence cards."""
+    def render_stacking_guidance(stage: int = 3):
+        """Render step-by-step worker stacking sequence cards dynamically based on live YOLO detections."""
+        s1_badge = "✅" if stage > 1 else ("▶️ LIVE" if stage == 1 else "⏳")
+        s2_badge = "✅" if stage > 2 else ("▶️ LIVE" if stage == 2 else "⏳")
+        s3_badge = "✅" if stage >= 3 else ("▶️ LIVE" if stage == 3 else "⏳")
+
+        s1_bg = "rgba(16,185,129,0.15)" if stage >= 1 else "rgba(255,255,255,0.02)"
+        s2_bg = "rgba(77,107,255,0.15)" if stage >= 2 else "rgba(255,255,255,0.02)"
+        s3_bg = "rgba(234,179,8,0.15)" if stage >= 3 else "rgba(255,255,255,0.02)"
+
         guidance_html = textwrap.dedent(f"""
         <div style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); border-radius: 12px; padding: 14px; margin-bottom: 12px;">
             <div style="font-size: 13px; font-weight: 700; color: #fff; font-family: 'Outfit', sans-serif; margin-bottom: 10px;">
                 {t("stacking_guidance")}
             </div>
             <div style="display: flex; flex-direction: column; gap: 8px;">
-                <div style="background: rgba(16,185,129,0.1); border-left: 4px solid #10b981; padding: 10px 12px; border-radius: 6px; font-size: 12px; color: #e8ecf1;">
-                    <b style="color: #10b981;">{t("step_1")}</b>
+                <div style="background: {s1_bg}; border-left: 4px solid #10b981; padding: 10px 12px; border-radius: 6px; font-size: 12px; color: #e8ecf1;">
+                    <b style="color: #10b981;">{s1_badge} {t("step_1")}</b>
                 </div>
-                <div style="background: rgba(77,107,255,0.1); border-left: 4px solid #4d6bff; padding: 10px 12px; border-radius: 6px; font-size: 12px; color: #e8ecf1;">
-                    <b style="color: #4d6bff;">{t("step_2")}</b>
+                <div style="background: {s2_bg}; border-left: 4px solid #4d6bff; padding: 10px 12px; border-radius: 6px; font-size: 12px; color: #e8ecf1;">
+                    <b style="color: #4d6bff;">{s2_badge} {t("step_2")}</b>
                 </div>
-                <div style="background: rgba(234,179,8,0.1); border-left: 4px solid #eab308; padding: 10px 12px; border-radius: 6px; font-size: 12px; color: #e8ecf1;">
-                    <b style="color: #eab308;">{t("step_3")}</b>
+                <div style="background: {s3_bg}; border-left: 4px solid #eab308; padding: 10px 12px; border-radius: 6px; font-size: 12px; color: #e8ecf1;">
+                    <b style="color: #eab308;">{s3_badge} {t("step_3")}</b>
                 </div>
             </div>
         </div>
@@ -2024,6 +2035,10 @@ elif active_use_case == "container":
                     # Color-code items on the belt as Box A (Green), Box B (Blue), Box C (Yellow)
                     boxes = nms_boxes([(int(b.xyxy[0][0]), int(b.xyxy[0][1]), int(b.xyxy[0][2]), int(b.xyxy[0][3]), float(b.conf[0])) for b in results[0].boxes if model.names[int(b.cls[0])] in PACKAGE_COCO_CLASSES], thr=0.30)
 
+                    det_n = len(boxes)
+                    live_stage = min(3, max(1, det_n))
+                    live_fill_rate = 45.0 if live_stage == 1 else (78.0 if live_stage == 2 else 94.2)
+
                     for idx, (x1, y1, x2, y2, conf_v) in enumerate(boxes):
                         if idx % 3 == 0:
                             color = (16, 185, 129)  # Green -> Box A Heavy
@@ -2040,17 +2055,17 @@ elif active_use_case == "container":
 
                     # Top banner: 3D Layout Optimization Status
                     cv2.rectangle(annotated, (0, 0), (annotated.shape[1], 36), (10, 15, 26), -1)
-                    draw_text(annotated, f"AI 3D Packing Engine | Fill Ratio: 94.2% | {target_container}", (12, 24), color_bgr=(16, 185, 129), scale=0.6, thickness=2)
+                    draw_text(annotated, f"AI 3D Packing Engine | Fill Ratio: {live_fill_rate:.1f}% | {target_container}", (12, 24), color_bgr=(16, 185, 129), scale=0.6, thickness=2)
 
                     alert3.info(t("recommendation_banner"))
                     stframe3.image(annotated, channels="BGR", width=520)
 
-                    # Render Live Logistics KPIs
+                    # Render Live Logistics KPIs dynamically
                     metrics_html3 = f"""
                     <div style="display: flex; gap: 12px; margin-bottom: 12px;">
                         <div style="flex: 1; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); border-radius: 12px; padding: 12px; text-align: center;">
                             <div style="font-size: 11px; color: #5b6b7e; font-weight: 600;">{t("fill_ratio")}</div>
-                            <div style="font-size: 20px; font-weight: 800; color: #10b981; font-family: Outfit;">94.2%</div>
+                            <div style="font-size: 20px; font-weight: 800; color: #10b981; font-family: Outfit;">{live_fill_rate:.1f}%</div>
                         </div>
                         <div style="flex: 1; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); border-radius: 12px; padding: 12px; text-align: center;">
                             <div style="font-size: 11px; color: #5b6b7e; font-weight: 600;">{t("weight_balance")}</div>
@@ -2065,8 +2080,8 @@ elif active_use_case == "container":
                     """
                     metrics_placeholder3.markdown(metrics_html3, unsafe_allow_html=True)
 
-                    render_container_spatial_map()
-                    render_stacking_guidance()
+                    render_container_spatial_map(stage=live_stage)
+                    render_stacking_guidance(stage=live_stage)
 
                     processing_time = time.time() - start_time
                     time.sleep(max(0.001, frame_delay - processing_time))
