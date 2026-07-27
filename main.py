@@ -1376,7 +1376,7 @@ if active_use_case == "secure":
                 # Faster than real-time so the bottle demo doesn't feel like a long wait
                 fps = cap.get(cv2.CAP_PROP_FPS)
                 base_delay = 1.0 / fps if fps > 0 else 0.033
-                frame_delay = base_delay / max(1.0, SECURE_PLAYBACK_SPEED)
+                secure_frame_i = 0
                 _seek_secure_demo_start(cap, source, fps)
                 st.session_state.active_products = {}
                 st.session_state.fallback_tracks = {}
