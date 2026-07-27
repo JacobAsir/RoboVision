@@ -1022,6 +1022,14 @@ def get_video_source(tab_key):
         demo_file = DEMO_VIDEO_LOADING
 
     if source_choice == "demo":
+        if tab_key == "container":
+            scenario_choice = st.selectbox(
+                "Select Logistics Scenario",
+                ["Scenario 1: Conveyor Parcel Bay", "Scenario 2: Heavy Freight Dock"],
+                index=0, key="container_scenario_sel"
+            )
+            demo_file = DEMO_VIDEO_CONTAINER if "Scenario 1" in scenario_choice else DEMO_VIDEO_LOADING
+
         resolved = ensure_demo_video(demo_file, tab_key)
         if resolved:
             return resolved
