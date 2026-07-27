@@ -1564,33 +1564,27 @@ if active_use_case == "secure":
             finally:
                 cap.release()
     
-    # Show history database logs when camera is stopped
     if not run_secure:
         with col_stats:
-            render_secure_log_table(
-                log_table,
-                limit=5,
-                empty_msg=t("no_logs_secure"),
-            )
-            total_removals = count_secure_removals()
             metrics_html = f"""
             <div style="display: flex; gap: 12px; margin-bottom: 12px;">
                 <div style="flex: 1; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); border-radius: 12px; padding: 12px; text-align: center;">
                     <div style="font-size: 11px; color: #5b6b7e; font-weight: 600;">{t("active_items")}</div>
-                    <div style="font-size: 20px; font-weight: 800; color: #4d6bff; font-family: Outfit;">{len(st.session_state.active_products)}</div>
+                    <div style="font-size: 20px; font-weight: 800; color: #4d6bff; font-family: Outfit;">0</div>
                 </div>
                 <div style="flex: 1; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); border-radius: 12px; padding: 12px; text-align: center;">
                     <div style="font-size: 11px; color: #5b6b7e; font-weight: 600;">{t("removals")}</div>
-                    <div style="font-size: 20px; font-weight: 800; color: #4d6bff; font-family: Outfit;">{total_removals}</div>
+                    <div style="font-size: 20px; font-weight: 800; color: #4d6bff; font-family: Outfit;">0</div>
                 </div>
                 <div style="flex: 1.2; display: flex; align-items: center; justify-content: center;">
-                    <div class="pill pill-green" style="width: 100%; text-align: center; justify-content: center; font-size: 12px;">
-                        {t("monitoring")}
+                    <div class="pill pill-blue" style="width: 100%; text-align: center; justify-content: center; font-size: 12px;">
+                        STANDBY
                     </div>
                 </div>
             </div>
             """
             metrics_placeholder.markdown(metrics_html, unsafe_allow_html=True)
+            log_table.info("Turn ON Activate CCTV Feed to start real-time monitoring.")
             
     # Export reports (same 4 columns)
     full = fetch_secure_logs(limit=100000)
@@ -1840,28 +1834,27 @@ elif active_use_case == "loading":
     elif run_loading and not source2:
         stframe2.info(t("select_source"))
     
-    # Show history database logs when camera is stopped
     if not run_loading:
         with col_stats2:
-            conn = sqlite3.connect(DB_PATH)
-            df2 = pd.read_sql_query(
-                "SELECT timestamp as Time, expected_count as Expected, detected_count as Detected, status as Status "
-                "FROM loading_logs ORDER BY id DESC LIMIT 5",
-                conn,
-            )
-            conn.close()
-            if not df2.empty:
-                df2["Time"] = pd.to_datetime(df2["Time"]).dt.strftime("%H:%M:%S")
-                df2["Status"] = df2["Status"].map(localize_event_text)
-                df2 = df2.rename(columns={
-                    "Time": t("col_time"),
-                    "Expected": t("col_expected"),
-                    "Detected": t("col_detected"),
-                    "Status": t("col_status"),
-                })
-                log_table2.dataframe(df2, use_container_width=True, hide_index=True)
-            else:
-                log_table2.info(t("no_logs_loading"))
+            metrics_html2 = f"""
+            <div style="display: flex; gap: 12px; margin-bottom: 12px;">
+                <div style="flex: 1; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); border-radius: 12px; padding: 12px; text-align: center;">
+                    <div style="font-size: 11px; color: #5b6b7e; font-weight: 600;">{t("expected")}</div>
+                    <div style="font-size: 20px; font-weight: 800; color: #4d6bff; font-family: Outfit;">{expected_items}</div>
+                </div>
+                <div style="flex: 1; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); border-radius: 12px; padding: 12px; text-align: center;">
+                    <div style="font-size: 11px; color: #5b6b7e; font-weight: 600;">{t("detected")}</div>
+                    <div style="font-size: 20px; font-weight: 800; color: #4d6bff; font-family: Outfit;">0</div>
+                </div>
+                <div style="flex: 1.2; display: flex; align-items: center; justify-content: center;">
+                    <div class="pill pill-blue" style="width: 100%; text-align: center; justify-content: center; font-size: 12px;">
+                        STANDBY
+                    </div>
+                </div>
+            </div>
+            """
+            metrics_placeholder2.markdown(metrics_html2, unsafe_allow_html=True)
+            log_table2.info("Turn ON Activate Verification Feed to start real-time checking.")
                 
             # Render initial metrics
             metrics_html2 = f"""
@@ -2009,6 +2002,9 @@ elif active_use_case == "container":
 
     if not run_container:
         stframe3.info("Turn **ON** Activate Stacking Optimizer to start the video.")
+        render_container_metrics(stage=0)
+        render_container_spatial_map(stage=0)
+        render_stacking_guidance(stage=0)
     elif not source3:
         stframe3.warning(t("select_source"))
     elif run_container and source3:
