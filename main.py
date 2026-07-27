@@ -34,7 +34,7 @@ STABLE_WINDOW = 8
 # Bottle / secure demo: snappy but still trackable (stride 1 keeps multi-bottle IDs stable)
 SECURE_PLAYBACK_SPEED = 1.75         # slightly faster than real-time
 SECURE_FRAME_STRIDE = 2 if LOW_MEM else 1  # skip frames on small Render instances
-SECURE_DEMO_START_SEC = 3.0          # skip first 3s of bottle demo (idle intro)
+SECURE_DEMO_START_SEC = 0.0          # start bottle demo right from 0:00
 SECURE_SLOT_MATCH_DIST = 100.0       # px — match bottles by position, not only YOLO track id
 INFER_IMGSZ = 320 if LOW_MEM else 416
 DEMO_VIDEO_SECURE = os.path.join(BASE_DIR, "bottle-detection.mp4")
@@ -1377,9 +1377,14 @@ if active_use_case == "secure":
                 fps = cap.get(cv2.CAP_PROP_FPS)
                 base_delay = 1.0 / fps if fps > 0 else 0.033
                 frame_delay = base_delay / max(1.0, SECURE_PLAYBACK_SPEED)
-                secure_frame_i = 0
-                # Bottle demo: jump past the first 3 seconds
                 _seek_secure_demo_start(cap, source, fps)
+                st.session_state.active_products = {}
+                st.session_state.fallback_tracks = {}
+                st.session_state.secure_baseline_count = 0
+                st.session_state.secure_low_count_streak = 0
+                st.session_state.secure_recent_person = False
+                st.session_state.secure_slot_seq = 1
+                st.session_state.last_alert = None
                 
                 while run_secure:
                     start_time = time.time()
