@@ -8,6 +8,7 @@ import numpy as np
 import os
 import base64
 import gc
+import textwrap
 
 # Streamlit Cloud / containers: Ultralytics cannot write ~/.config
 os.environ.setdefault("YOLO_CONFIG_DIR", os.path.join("/tmp", "Ultralytics"))
@@ -177,9 +178,10 @@ I18N = {
         "weight_balance": "WEIGHT BALANCE",
         "crush_risk": "CRUSH RISK",
         "status_optimal": "✅ OPTIMAL",
-        "step_1": "1️⃣ Step 1: Load Box A [Heavy] → Floor Layer (Base)",
-        "step_2": "2️⃣ Step 2: Load Box B [Medium] → Middle Layer (Stack on Box A)",
-        "step_3": "3️⃣ Step 3: Load Box C [Fragile] → Top Layer (Surface)",
+        "recommendation_banner": "AI Loading Plan for Container ❶: Start with Box A [Floor Base] ➔ Stack Box B [Middle] ➔ Top with Box C [Surface]",
+        "step_1": "1️⃣ Step 1: Start with Box A [Heavy] → Place at Floor Base (Section 1)",
+        "step_2": "2️⃣ Step 2: Stack Box B [Medium] → Place directly on top of Box A",
+        "step_3": "3️⃣ Step 3: Finish with Box C [Fragile] → Place on Upper Surface (94.2% Capacity)",
         "axle_even": "50% Front / 50% Rear (EVEN)",
         "zero_warnings": "0 Safety Warnings",
         "no_logs_container": "No stacking logs registered yet. Run video feed to generate placement plan.",
@@ -277,9 +279,10 @@ I18N = {
         "weight_balance": "重量バランス",
         "crush_risk": "荷崩れリスク",
         "status_optimal": "✅ 最適化完了",
-        "step_1": "1️⃣ ステップ1: 荷物A [重量物] を搬入 → 最下層 (床面左)",
-        "step_2": "2️⃣ ステップ2: 荷物B [中量物] を搬入 → 中間層 (荷物Aの上へ重畳)",
-        "step_3": "3️⃣ ステップ3: 荷物C [壊れ物] を搬入 → 最上層 (天面)",
+        "recommendation_banner": "コンテナ❶向けAI積載プラン: 荷物A[床面ベース]を配置 ➔ 荷物B[中間層]を重畳 ➔ 荷物C[最上層]を天面へ",
+        "step_1": "1️⃣ ステップ1: 荷物A [重量物] を搬入 → 床面ベース (セクション1) へ配置",
+        "step_2": "2️⃣ ステップ2: 荷物B [中量物] を搬入 → 荷物Aの直上へ重畳積載",
+        "step_3": "3️⃣ ステップ3: 荷物C [壊れ物] で完了 → 最上層・天面へ配置 (積載率 94.2%)",
         "axle_even": "前軸50% / 後軸50% (均等)",
         "zero_warnings": "安全警告 0件",
         "no_logs_container": "まだログはありません。動画を実行すると積載プランが生成されます。",
@@ -1912,17 +1915,14 @@ elif active_use_case == "container":
 
     def render_container_spatial_map():
         """Render an SVG/HTML spatial plan of Container ❶ showing color-coded stacked layers."""
-        map_html = f"""
-        <div style="background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.08); border-radius: 12px; padding: 16px; margin-bottom: 12px;">
-            <div style="font-size: 13px; font-weight: 700; color: #fff; font-family: Outfit; margin-bottom: 10px; display:flex; justify-content:space-between; align-items:center;">
+        map_html = textwrap.dedent(f"""
+        <div style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); border-radius: 12px; padding: 16px; margin-bottom: 12px;">
+            <div style="font-size: 13px; font-weight: 700; color: #fff; font-family: 'Outfit', sans-serif; margin-bottom: 12px; display:flex; justify-content:space-between; align-items:center;">
                 <span>{t("container_3d_map")} — {target_container}</span>
                 <span class="pill pill-green" style="font-size:11px; padding:3px 10px;">{t("status_optimal")}</span>
             </div>
-            
-            <!-- Wireframe Container Cross-Section -->
-            <div style="position: relative; width: 100%; height: 140px; border: 2px dashed rgba(77,107,255,0.4); border-radius: 8px; background: rgba(10,15,26,0.6); padding: 8px; box-sizing: border-box; display: flex; flex-direction: column; justify-content: flex-end; gap: 6px;">
-                <!-- Top Layer (Fragile - Box C) -->
-                <div style="display: flex; gap: 6px; height: 34px;">
+            <div style="position: relative; width: 100%; height: 150px; border: 2px dashed rgba(77,107,255,0.4); border-radius: 8px; background: rgba(10,15,26,0.8); padding: 8px; box-sizing: border-box; display: flex; flex-direction: column; justify-content: flex-end; gap: 6px;">
+                <div style="display: flex; gap: 6px; height: 36px;">
                     <div style="flex: 1; background: rgba(234,179,8,0.25); border: 1px solid #eab308; border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; color: #fde047;">
                         {t("box_c")} [TOP]
                     </div>
@@ -1930,8 +1930,7 @@ elif active_use_case == "container":
                         {t("box_c")} [TOP]
                     </div>
                 </div>
-                <!-- Middle Layer (Medium - Box B) -->
-                <div style="display: flex; gap: 6px; height: 38px;">
+                <div style="display: flex; gap: 6px; height: 40px;">
                     <div style="flex: 1; background: rgba(77,107,255,0.25); border: 1px solid #4d6bff; border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; color: #93c5fd;">
                         {t("box_b")} [MID]
                     </div>
@@ -1939,8 +1938,7 @@ elif active_use_case == "container":
                         {t("box_b")} [MID]
                     </div>
                 </div>
-                <!-- Base Layer (Heavy - Box A) -->
-                <div style="display: flex; gap: 6px; height: 42px;">
+                <div style="display: flex; gap: 6px; height: 46px;">
                     <div style="flex: 1; background: rgba(16,185,129,0.3); border: 1px solid #10b981; border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 800; color: #6ee7b7;">
                         {t("box_a")} [FLOOR]
                     </div>
@@ -1950,14 +1948,14 @@ elif active_use_case == "container":
                 </div>
             </div>
         </div>
-        """
+        """)
         spatial_map_placeholder3.markdown(map_html, unsafe_allow_html=True)
 
     def render_stacking_guidance():
         """Render step-by-step worker stacking sequence cards."""
-        guidance_html = f"""
-        <div style="background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.08); border-radius: 12px; padding: 14px; margin-bottom: 12px;">
-            <div style="font-size: 13px; font-weight: 700; color: #fff; font-family: Outfit; margin-bottom: 10px;">
+        guidance_html = textwrap.dedent(f"""
+        <div style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); border-radius: 12px; padding: 14px; margin-bottom: 12px;">
+            <div style="font-size: 13px; font-weight: 700; color: #fff; font-family: 'Outfit', sans-serif; margin-bottom: 10px;">
                 {t("stacking_guidance")}
             </div>
             <div style="display: flex; flex-direction: column; gap: 8px;">
@@ -1972,7 +1970,7 @@ elif active_use_case == "container":
                 </div>
             </div>
         </div>
-        """
+        """)
         guidance_placeholder3.markdown(guidance_html, unsafe_allow_html=True)
 
     if not run_container:
@@ -2038,6 +2036,7 @@ elif active_use_case == "container":
                     cv2.rectangle(annotated, (0, 0), (annotated.shape[1], 36), (10, 15, 26), -1)
                     draw_text(annotated, f"AI 3D Packing Engine | Fill Ratio: 94.2% | {target_container}", (12, 24), color_bgr=(16, 185, 129), scale=0.6, thickness=2)
 
+                    alert3.info(t("recommendation_banner"))
                     stframe3.image(annotated, channels="BGR", width=520)
 
                     # Render Live Logistics KPIs
