@@ -24,8 +24,8 @@ PACKAGE_MODEL_NAME = os.path.join(BASE_DIR, "yolov8s-world.pt")
 LOW_MEM = os.environ.get("ROBOVISION_LOW_MEM", "1").strip().lower() in ("1", "true", "yes", "on")
 CONF_THRESHOLD = 0.40
 SECURE_CONF_THRESHOLD = 0.28         # softer so bottles + people stick in demo footage
-LOADING_CONF_THRESHOLD = 0.22
-PACKAGE_CONF_THRESHOLD = 0.18
+LOADING_CONF_THRESHOLD = 0.12
+PACKAGE_CONF_THRESHOLD = 0.12
 IOU_THRESHOLD = 0.50
 OCCLUSION_LIMIT = 4                  # frames missing before we treat item as removed
 MIN_PRODUCT_SEEN = 3                 # must be visible this many frames before a removal counts
@@ -40,7 +40,10 @@ DEMO_VIDEO_SECURE = os.path.join(BASE_DIR, "bottle-detection.mp4")
 DEMO_VIDEO_LOADING = os.path.join(BASE_DIR, "5903898-hd_1920_1080_30fps.mp4")
 DB_PATH = os.path.join(BASE_DIR, "robovision.db")
 # Fallback proxies if YOLO-World is unavailable / low-mem
-PACKAGE_COCO_CLASSES = ("suitcase", "book", "backpack", "handbag", "bed", "microwave")
+PACKAGE_COCO_CLASSES = (
+    "suitcase", "book", "backpack", "handbag", "bed", "microwave",
+    "tv", "clock", "laptop", "refrigerator", "couch", "box", "toaster", "chair"
+)
 PACKAGE_WORLD_CLASSES = [
     "package", "parcel", "cardboard box", "box", "mailer bag", "shipping package"
 ]
@@ -868,6 +871,21 @@ def detect_packages_on_belt(frame, package_model, use_world: bool = True):
     # light ROI outline so operators know where we count
     cv2.polylines(annotated, [belt_roi_polygon(h, w)], True, (77, 107, 255), 1)
     for x1, y1, x2, y2, conf_v in boxes:
+        # Censor brand text/logo on display frame for orange/brown cardboard boxes
+        box_crop = frame[max(0, y1):min(h, y2), max(0, x1):min(w, x2)]
+        if box_crop.size > 0:
+            hsv = cv2.cvtColor(box_crop, cv2.COLOR_BGR2HSV)
+            orange_mask = cv2.inRange(hsv, (8, 50, 50), (25, 255, 255))
+            if np.sum(orange_mask > 0) > 0.15 * (box_crop.shape[0] * box_crop.shape[1]):
+                bh, bw = y2 - y1, x2 - x1
+                cx1, cy1 = x1 + int(bw * 0.2), y1 + int(bh * 0.2)
+                cx2, cy2 = x1 + int(bw * 0.8), y1 + int(bh * 0.75)
+                cx1, cy1 = max(0, cx1), max(0, cy1)
+                cx2, cy2 = min(w, cx2), min(h, cy2)
+                sub_roi = annotated[cy1:cy2, cx1:cx2]
+                if sub_roi.size > 0:
+                    annotated[cy1:cy2, cx1:cx2] = cv2.GaussianBlur(sub_roi, (41, 41), 15)
+
         cv2.rectangle(annotated, (x1, y1), (x2, y2), (16, 185, 129), 2)
         draw_text(
             annotated, f"{t('package_label')} {conf_v:.2f}",
@@ -1546,8 +1564,8 @@ elif active_use_case == "loading":
         if verify_class == "package":
             st.caption(t("package_caption"))
             
-        # Demo footage often has ~4–6 parcels on the belt — 2 was unrealistically low
-        expected_items = st.number_input(t("expected_qty"), min_value=0, value=4, step=1)
+        # Demo footage has 3 package groups passing on the belt
+        expected_items = st.number_input(t("expected_qty"), min_value=0, value=3, step=1)
         
         # Clean run toggle
         st.markdown("")
