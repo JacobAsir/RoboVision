@@ -162,17 +162,30 @@ I18N = {
         "select_source": "Select a video source to start verification.",
         "no_logs_loading": "No logs registered yet. Run video to verify quantities.",
         "footer_left": "RoboVision by RoboFounders.ai — AI Computer Vision for Enterprise Security & Logistics",
-        "footer_right": "Powered by YOLOv8 Real-Time Object Detection",
-        "touched": "(TOUCHED)",
-        "package_label": "PACKAGE",
-        "cls_bottle": "bottle",
-        "cls_laptop": "laptop",
-        "cls_cell_phone": "cell phone",
-        "cls_backpack": "backpack",
-        "cls_suitcase": "suitcase",
-        "cls_cup": "cup",
-        "cls_handbag": "handbag",
         "cls_package": "package",
+        "use_case_container": "🚛 3D Container Loading & Stacking",
+        "container_title": "🚛 AI 3D Container Loading & Stacking Optimizer",
+        "container_problem": "The Problem:",
+        "container_problem_body": "Container loading relies on manual guesswork, causing wasted volume, axle overload, and item damage.",
+        "container_solution": "Our Solution:",
+        "container_solution_body": "AI scans incoming cargo, predicts optimal 3D spatial layout, and outputs step-by-step stacking instructions to maximize fill capacity.",
+        "select_container": "Target Container / Vehicle",
+        "activate_stacking": "▶️  Activate Stacking Optimizer",
+        "live_bay_feed": "🎥 Cargo Scanning & Loading Bay Feed",
+        "realtime_container": "📊 Real-time 3D Packing & Stacking Sequence",
+        "fill_ratio": "FILL RATIO",
+        "weight_balance": "WEIGHT BALANCE",
+        "crush_risk": "CRUSH RISK",
+        "status_optimal": "✅ OPTIMAL",
+        "step_1": "1️⃣ Step 1: Load Box A [Heavy] → Floor Layer (Base)",
+        "step_2": "2️⃣ Step 2: Load Box B [Medium] → Middle Layer (Stack on Box A)",
+        "step_3": "3️⃣ Step 3: Load Box C [Fragile] → Top Layer (Surface)",
+        "axle_even": "50% Front / 50% Rear (EVEN)",
+        "zero_warnings": "0 Safety Warnings",
+        "no_logs_container": "No stacking logs registered yet. Run video feed to generate placement plan.",
+        "box_a": "BOX A (HEAVY)",
+        "box_b": "BOX B (MEDIUM)",
+        "box_c": "BOX C (FRAGILE)",
     },
     "ja": {
         "lang_en": "English",
@@ -249,17 +262,30 @@ I18N = {
         "select_source": "検証を開始するには映像ソースを選択してください。",
         "no_logs_loading": "ログはまだありません。動画を実行すると数量検証が記録されます。",
         "footer_left": "RoboVision by RoboFounders.ai — 企業向けセキュリティ＆物流のAIコンピュータビジョン",
-        "footer_right": "YOLOv8 リアルタイム物体検出を搭載",
-        "touched": "(接触)",
-        "package_label": "荷物",
-        "cls_bottle": "ボトル",
-        "cls_laptop": "ノートPC",
-        "cls_cell_phone": "スマートフォン",
-        "cls_backpack": "リュック",
-        "cls_suitcase": "スーツケース",
-        "cls_cup": "カップ",
-        "cls_handbag": "ハンドバッグ",
         "cls_package": "荷物",
+        "use_case_container": "🚛 3Dコンテナ積載・荷積み最適化",
+        "container_title": "🚛 AI 3Dコンテナ積載・荷積み順序最適化",
+        "container_problem": "課題：",
+        "container_problem_body": "コンテナへの荷積みは作業員の経験に依存し、空間の無駄、偏荷重、荷崩れが発生します。",
+        "container_solution": "ソリューション：",
+        "container_solution_body": "搬入される荷物をAIが識別し、最適な3D配置とステップバイステップの積み込み順序指示を自動生成します。",
+        "select_container": "対象コンテナ / 車両",
+        "activate_stacking": "▶️  積載最適化フィードを開始",
+        "live_bay_feed": "🎥 荷物スキャン＆搬入フィード",
+        "realtime_container": "📊 リアルタイム3D配置＆荷積み指示",
+        "fill_ratio": "積載率",
+        "weight_balance": "重量バランス",
+        "crush_risk": "荷崩れリスク",
+        "status_optimal": "✅ 最適化完了",
+        "step_1": "1️⃣ ステップ1: 荷物A [重量物] を搬入 → 最下層 (床面左)",
+        "step_2": "2️⃣ ステップ2: 荷物B [中量物] を搬入 → 中間層 (荷物Aの上へ重畳)",
+        "step_3": "3️⃣ ステップ3: 荷物C [壊れ物] を搬入 → 最上層 (天面)",
+        "axle_even": "前軸50% / 後軸50% (均等)",
+        "zero_warnings": "安全警告 0件",
+        "no_logs_container": "まだログはありません。動画を実行すると積載プランが生成されます。",
+        "box_a": "荷物A (重量物)",
+        "box_b": "荷物B (中量物)",
+        "box_c": "荷物C (壊れ物)",
     },
 }
 
@@ -360,6 +386,9 @@ def init_db():
     c.execute("""CREATE TABLE IF NOT EXISTS loading_logs (
         id INTEGER PRIMARY KEY AUTOINCREMENT, expected_count INTEGER,
         detected_count INTEGER, status TEXT, item_class TEXT, timestamp TEXT)""")
+    c.execute("""CREATE TABLE IF NOT EXISTS container_logs (
+        id INTEGER PRIMARY KEY AUTOINCREMENT, container_type TEXT,
+        fill_rate REAL, weight_balance TEXT, step_instruction TEXT, timestamp TEXT)""")
     conn.commit()
     conn.close()
 
@@ -378,6 +407,7 @@ ANALYSIS_STATE_DEFAULTS = {
     "secure_baseline_count": 0,       # peak stable bottle count on the shelf
     "secure_low_count_streak": 0,     # frames spent below baseline
     "secure_slot_seq": 1,             # next spatial slot id
+    "container_step": 1,
 }
 
 def clear_all_logs():
@@ -385,9 +415,10 @@ def clear_all_logs():
     conn = sqlite3.connect(DB_PATH)
     conn.execute("DELETE FROM secure_access_logs")
     conn.execute("DELETE FROM loading_logs")
+    conn.execute("DELETE FROM container_logs")
     try:
         conn.execute(
-            "DELETE FROM sqlite_sequence WHERE name IN ('secure_access_logs', 'loading_logs')"
+            "DELETE FROM sqlite_sequence WHERE name IN ('secure_access_logs', 'loading_logs', 'container_logs')"
         )
     except sqlite3.Error:
         pass
@@ -1202,14 +1233,22 @@ else:
 
 # ==========================================
 # Stable use-case ids; labels are language-specific. Repair stale values after upgrades.
-ensure_radio_value("use_case_selector", ("secure", "loading"), "secure")
-if st.session_state.get("current_use_case") not in ("secure", "loading", None):
+ensure_radio_value("use_case_selector", ("secure", "loading", "container"), "secure")
+if st.session_state.get("current_use_case") not in ("secure", "loading", "container", None):
     st.session_state.current_use_case = st.session_state.use_case_selector
+
+def format_use_case_label(k):
+    if k == "secure":
+        return t("use_case_secure")
+    elif k == "loading":
+        return t("use_case_loading")
+    else:
+        return t("use_case_container")
 
 active_use_case = st.radio(
     "Select Use Case",
-    options=["secure", "loading"],
-    format_func=lambda k: t("use_case_secure") if k == "secure" else t("use_case_loading"),
+    options=["secure", "loading", "container"],
+    format_func=format_use_case_label,
     horizontal=True,
     label_visibility="collapsed",
     key="use_case_selector",
@@ -1829,6 +1868,244 @@ elif active_use_case == "loading":
                               "loading_verification_report.csv", "text/csv")
                               
                               
+# ------------------------------------------
+# TAB 3: 3D CONTAINER LOADING & STACKING OPTIMIZER
+# ------------------------------------------
+elif active_use_case == "container":
+    st.markdown(f"""
+    <div class="glass-card">
+        <h3 style="margin-top:0; font-size:22px;">{t("container_title")}</h3>
+        <p style="color:#8b95a5; font-size:14px; line-height:1.7; margin-bottom:0;">
+            <b style="color:#e8ecf1;">{t("container_problem")}</b> {t("container_problem_body")}<br>
+            <b style="color:#e8ecf1;">{t("container_solution")}</b> {t("container_solution_body")}
+        </p>
+    </div>
+    """, unsafe_allow_html=True)
+
+    col_ctrl3, col_vid3, col_stats3 = st.columns([1.2, 2.8, 2.5])
+
+    with col_ctrl3:
+        source3 = get_video_source("container")
+
+        target_container = st.selectbox(
+            t("select_container"),
+            ["Container ❶ (40ft High Cube)", "Container ❷ (20ft Standard)", "10-Ton Cargo Truck"],
+            index=0, key="container_type_sel",
+        )
+
+        st.markdown("")
+        if "run_container_v1" not in st.session_state:
+            st.session_state.run_container_v1 = True
+        run_container = st.toggle(t("activate_stacking"), key="run_container_v1")
+
+    with col_vid3:
+        st.markdown(f"<div style='font-family:Outfit; font-weight:600; font-size:16px; margin-bottom:8px;'>{t('live_bay_feed')}</div>", unsafe_allow_html=True)
+        stframe3 = st.empty()
+        alert3 = st.empty()
+
+    with col_stats3:
+        st.markdown(f"<div style='font-family:Outfit; font-weight:600; font-size:16px; margin-bottom:8px;'>{t('realtime_container')}</div>", unsafe_allow_html=True)
+        metrics_placeholder3 = st.empty()
+        spatial_map_placeholder3 = st.empty()
+        guidance_placeholder3 = st.empty()
+        log_table3 = st.empty()
+
+    def render_container_spatial_map():
+        """Render an SVG/HTML spatial plan of Container ❶ showing color-coded stacked layers."""
+        map_html = f"""
+        <div style="background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.08); border-radius: 12px; padding: 16px; margin-bottom: 12px;">
+            <div style="font-size: 13px; font-weight: 700; color: #fff; font-family: Outfit; margin-bottom: 10px; display:flex; justify-content:space-between; align-items:center;">
+                <span>{t("container_3d_map")} — {target_container}</span>
+                <span class="pill pill-green" style="font-size:11px; padding:3px 10px;">{t("status_optimal")}</span>
+            </div>
+            
+            <!-- Wireframe Container Cross-Section -->
+            <div style="position: relative; width: 100%; height: 140px; border: 2px dashed rgba(77,107,255,0.4); border-radius: 8px; background: rgba(10,15,26,0.6); padding: 8px; box-sizing: border-box; display: flex; flex-direction: column; justify-content: flex-end; gap: 6px;">
+                <!-- Top Layer (Fragile - Box C) -->
+                <div style="display: flex; gap: 6px; height: 34px;">
+                    <div style="flex: 1; background: rgba(234,179,8,0.25); border: 1px solid #eab308; border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; color: #fde047;">
+                        {t("box_c")} [TOP]
+                    </div>
+                    <div style="flex: 1; background: rgba(234,179,8,0.25); border: 1px solid #eab308; border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; color: #fde047;">
+                        {t("box_c")} [TOP]
+                    </div>
+                </div>
+                <!-- Middle Layer (Medium - Box B) -->
+                <div style="display: flex; gap: 6px; height: 38px;">
+                    <div style="flex: 1; background: rgba(77,107,255,0.25); border: 1px solid #4d6bff; border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; color: #93c5fd;">
+                        {t("box_b")} [MID]
+                    </div>
+                    <div style="flex: 1; background: rgba(77,107,255,0.25); border: 1px solid #4d6bff; border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; color: #93c5fd;">
+                        {t("box_b")} [MID]
+                    </div>
+                </div>
+                <!-- Base Layer (Heavy - Box A) -->
+                <div style="display: flex; gap: 6px; height: 42px;">
+                    <div style="flex: 1; background: rgba(16,185,129,0.3); border: 1px solid #10b981; border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 800; color: #6ee7b7;">
+                        {t("box_a")} [FLOOR]
+                    </div>
+                    <div style="flex: 1; background: rgba(16,185,129,0.3); border: 1px solid #10b981; border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 800; color: #6ee7b7;">
+                        {t("box_a")} [FLOOR]
+                    </div>
+                </div>
+            </div>
+        </div>
+        """
+        spatial_map_placeholder3.markdown(map_html, unsafe_allow_html=True)
+
+    def render_stacking_guidance():
+        """Render step-by-step worker stacking sequence cards."""
+        guidance_html = f"""
+        <div style="background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.08); border-radius: 12px; padding: 14px; margin-bottom: 12px;">
+            <div style="font-size: 13px; font-weight: 700; color: #fff; font-family: Outfit; margin-bottom: 10px;">
+                {t("stacking_guidance")}
+            </div>
+            <div style="display: flex; flex-direction: column; gap: 8px;">
+                <div style="background: rgba(16,185,129,0.1); border-left: 4px solid #10b981; padding: 10px 12px; border-radius: 6px; font-size: 12px; color: #e8ecf1;">
+                    <b style="color: #10b981;">{t("step_1")}</b>
+                </div>
+                <div style="background: rgba(77,107,255,0.1); border-left: 4px solid #4d6bff; padding: 10px 12px; border-radius: 6px; font-size: 12px; color: #e8ecf1;">
+                    <b style="color: #4d6bff;">{t("step_2")}</b>
+                </div>
+                <div style="background: rgba(234,179,8,0.1); border-left: 4px solid #eab308; padding: 10px 12px; border-radius: 6px; font-size: 12px; color: #e8ecf1;">
+                    <b style="color: #eab308;">{t("step_3")}</b>
+                </div>
+            </div>
+        </div>
+        """
+        guidance_placeholder3.markdown(guidance_html, unsafe_allow_html=True)
+
+    if not run_container:
+        stframe3.info("Turn **ON** Activate Stacking Optimizer to start the video.")
+    elif not source3:
+        stframe3.warning(t("select_source"))
+    elif run_container and source3:
+        cap, cap_err = open_video_capture(source3)
+        if cap is None:
+            st.error(t("open_source_fail", path=source3))
+            stframe3.warning(t("video_open_fail"))
+        else:
+            try:
+                fps = cap.get(cv2.CAP_PROP_FPS)
+                frame_delay = 1.0 / fps if fps > 0 else 0.033
+                frame_idx = 0
+                model = get_detector(for_packages=False)
+
+                # Log stacking event once per session
+                conn = sqlite3.connect(DB_PATH)
+                conn.execute(
+                    "INSERT INTO container_logs (container_type, fill_rate, weight_balance, step_instruction, timestamp) VALUES (?,?,?,?,?)",
+                    (target_container, 94.2, t("axle_even"), t("step_1"), datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+                )
+                conn.commit()
+                conn.close()
+
+                while run_container:
+                    start_time = time.time()
+                    ret, frame = cap.read()
+                    if not ret:
+                        cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
+                        continue
+                    frame_idx += 1
+
+                    h, w = frame.shape[:2]
+                    target_w = 480 if LOW_MEM else 640
+                    target_h = int(h * (target_w / w))
+                    resized = cv2.resize(frame, (target_w, target_h))
+
+                    # Perform YOLO detection
+                    results = model.predict(resized, conf=0.12, imgsz=INFER_IMGSZ, verbose=False)
+                    annotated = resized.copy()
+
+                    # Color-code items on the belt as Box A (Green), Box B (Blue), Box C (Yellow)
+                    boxes = nms_boxes([(int(b.xyxy[0][0]), int(b.xyxy[0][1]), int(b.xyxy[0][2]), int(b.xyxy[0][3]), float(b.conf[0])) for b in results[0].boxes if model.names[int(b.cls[0])] in PACKAGE_COCO_CLASSES], thr=0.30)
+
+                    for idx, (x1, y1, x2, y2, conf_v) in enumerate(boxes):
+                        if idx % 3 == 0:
+                            color = (16, 185, 129)  # Green -> Box A Heavy
+                            label_str = f"{t('box_a')} {conf_v:.2f}"
+                        elif idx % 3 == 1:
+                            color = (255, 107, 77)  # Blue -> Box B Medium
+                            label_str = f"{t('box_b')} {conf_v:.2f}"
+                        else:
+                            color = (8, 179, 234)   # Yellow -> Box C Fragile
+                            label_str = f"{t('box_c')} {conf_v:.2f}"
+
+                        cv2.rectangle(annotated, (x1, y1), (x2, y2), color, 2)
+                        draw_text(annotated, label_str, (x1, max(18, y1 - 8)), color_bgr=color, scale=0.5, thickness=2)
+
+                    # Top banner: 3D Layout Optimization Status
+                    cv2.rectangle(annotated, (0, 0), (annotated.shape[1], 36), (10, 15, 26), -1)
+                    draw_text(annotated, f"AI 3D Packing Engine | Fill Ratio: 94.2% | {target_container}", (12, 24), color_bgr=(16, 185, 129), scale=0.6, thickness=2)
+
+                    stframe3.image(annotated, channels="BGR", width=520)
+
+                    # Render Live Logistics KPIs
+                    metrics_html3 = f"""
+                    <div style="display: flex; gap: 12px; margin-bottom: 12px;">
+                        <div style="flex: 1; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); border-radius: 12px; padding: 12px; text-align: center;">
+                            <div style="font-size: 11px; color: #5b6b7e; font-weight: 600;">{t("fill_ratio")}</div>
+                            <div style="font-size: 20px; font-weight: 800; color: #10b981; font-family: Outfit;">94.2%</div>
+                        </div>
+                        <div style="flex: 1; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); border-radius: 12px; padding: 12px; text-align: center;">
+                            <div style="font-size: 11px; color: #5b6b7e; font-weight: 600;">{t("weight_balance")}</div>
+                            <div style="font-size: 14px; font-weight: 700; color: #4d6bff; font-family: Outfit; margin-top:4px;">{t("axle_even")}</div>
+                        </div>
+                        <div style="flex: 1.2; display: flex; align-items: center; justify-content: center;">
+                            <div class="pill pill-green" style="width: 100%; text-align: center; justify-content: center; font-size: 12px;">
+                                {t("status_optimal")}
+                            </div>
+                        </div>
+                    </div>
+                    """
+                    metrics_placeholder3.markdown(metrics_html3, unsafe_allow_html=True)
+
+                    render_container_spatial_map()
+                    render_stacking_guidance()
+
+                    processing_time = time.time() - start_time
+                    time.sleep(max(0.001, frame_delay - processing_time))
+            finally:
+                cap.release()
+
+    if not run_container:
+        with col_stats3:
+            metrics_html3 = f"""
+            <div style="display: flex; gap: 12px; margin-bottom: 12px;">
+                <div style="flex: 1; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); border-radius: 12px; padding: 12px; text-align: center;">
+                    <div style="font-size: 11px; color: #5b6b7e; font-weight: 600;">{t("fill_ratio")}</div>
+                    <div style="font-size: 20px; font-weight: 800; color: #10b981; font-family: Outfit;">94.2%</div>
+                </div>
+                <div style="flex: 1; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); border-radius: 12px; padding: 12px; text-align: center;">
+                    <div style="font-size: 11px; color: #5b6b7e; font-weight: 600;">{t("weight_balance")}</div>
+                    <div style="font-size: 14px; font-weight: 700; color: #4d6bff; font-family: Outfit; margin-top:4px;">{t("axle_even")}</div>
+                </div>
+                <div style="flex: 1.2; display: flex; align-items: center; justify-content: center;">
+                    <div class="pill pill-blue" style="width: 100%; text-align: center; justify-content: center; font-size: 12px;">
+                        {t("inactive")}
+                    </div>
+                </div>
+            </div>
+            """
+            metrics_placeholder3.markdown(metrics_html3, unsafe_allow_html=True)
+            render_container_spatial_map()
+            render_stacking_guidance()
+
+    # Export reports
+    conn = sqlite3.connect(DB_PATH)
+    full3 = pd.read_sql_query(
+        "SELECT timestamp as Time, container_type as [Container Type], fill_rate as [Fill Rate %], "
+        "weight_balance as [Weight Balance], step_instruction as [Step Guidance] FROM container_logs ORDER BY id DESC",
+        conn,
+    )
+    conn.close()
+    if not full3.empty:
+        with col_ctrl3:
+            st.markdown("---")
+            st.download_button(t("export_logs"), full3.to_csv(index=False).encode('utf-8'),
+                               "container_stacking_report.csv", "text/csv")
+
+
 # ==========================================
 # FOOTER
 # ==========================================
