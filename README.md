@@ -64,11 +64,6 @@ RoboVision unifies three enterprise AI modules into one interactive, multi-use-c
 - **Git**
 - OpenCV dependencies (FFmpeg for video decoding)
 
-### Step 1: Clone the Repository
-```bash
-git clone https.github.com/JacobAsir/RoboVision.git
-cd RoboVision
-```
 
 ### Step 2: Create & Activate Virtual Environment
 ```bash
